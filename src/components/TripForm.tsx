@@ -11,12 +11,13 @@ import {
   Compass,
   Plane,
   Wallet,
+  Calendar,
   CalendarRange,
   ArrowRight,
 } from "lucide-react";
 import VibeChip from "./VibeChip";
 import type { Season, Vibe } from "../data/destinations";
-import type { TripQuery } from "../lib/matchTrip";
+import type { PlanTripRequest } from "../types/trip";
 
 const VIBE_OPTIONS: { value: Vibe; label: string; icon: typeof Waves }[] = [
   { value: "relaxation", label: "Relaxation", icon: Waves },
@@ -35,8 +36,14 @@ const SEASON_OPTIONS: { value: Season; label: string }[] = [
   { value: "fall", label: "Fall" },
 ];
 
+function isoDateOffset(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 interface TripFormProps {
-  onSubmit: (query: TripQuery) => void;
+  onSubmit: (query: PlanTripRequest) => void;
 }
 
 export default function TripForm({ onSubmit }: TripFormProps) {
@@ -45,6 +52,7 @@ export default function TripForm({ onSubmit }: TripFormProps) {
   const [homeAirport, setHomeAirport] = useState("JFK");
   const [tripLength, setTripLength] = useState(7);
   const [season, setSeason] = useState<Season>("summer");
+  const [departureDate, setDepartureDate] = useState(() => isoDateOffset(30));
   const [error, setError] = useState<string | null>(null);
 
   const toggleVibe = (vibe: Vibe) => {
@@ -65,8 +73,19 @@ export default function TripForm({ onSubmit }: TripFormProps) {
       setError("Home airport should be a 3-letter code, like JFK or LHR.");
       return;
     }
+    if (!departureDate || departureDate < isoDateOffset(1)) {
+      setError("Pick a departure date at least a day from now.");
+      return;
+    }
     setError(null);
-    onSubmit({ budgetPerDay, vibes, homeAirport: homeAirport.trim().toUpperCase(), tripLength, season });
+    onSubmit({
+      budgetPerDay,
+      vibes,
+      homeAirport: homeAirport.trim().toUpperCase(),
+      tripLength,
+      season,
+      departureDate,
+    });
   };
 
   return (
@@ -164,6 +183,20 @@ export default function TripForm({ onSubmit }: TripFormProps) {
               className="w-full accent-fuchsia-500"
             />
           </div>
+        </div>
+
+        {/* Departure date */}
+        <div>
+          <label className="mb-3 flex items-center gap-2 text-sm font-medium text-white/80">
+            <Calendar size={16} /> Departure date
+          </label>
+          <input
+            type="date"
+            value={departureDate}
+            min={isoDateOffset(1)}
+            onChange={(e) => setDepartureDate(e.target.value)}
+            className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-white outline-none [color-scheme:dark] focus:border-fuchsia-400/60 focus:ring-2 focus:ring-fuchsia-400/20"
+          />
         </div>
 
         {/* Season */}
