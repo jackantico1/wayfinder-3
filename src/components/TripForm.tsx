@@ -9,13 +9,14 @@ import {
   UtensilsCrossed,
   Heart,
   Compass,
-  Plane,
   Wallet,
   Calendar,
   CalendarRange,
   ArrowRight,
 } from "lucide-react";
 import VibeChip from "./VibeChip";
+import AirportCombobox from "./AirportCombobox";
+import { findAirport } from "../data/airports";
 import type { Season, Vibe } from "../data/destinations";
 import type { PlanTripRequest } from "../types/trip";
 
@@ -69,8 +70,8 @@ export default function TripForm({ onSubmit }: TripFormProps) {
       setError("Pick at least one vibe so we know what you're after.");
       return;
     }
-    if (!/^[A-Za-z]{3}$/.test(homeAirport.trim())) {
-      setError("Home airport should be a 3-letter code, like JFK or LHR.");
+    if (!findAirport(homeAirport)) {
+      setError("Pick a home airport from the list.");
       return;
     }
     if (!departureDate || departureDate < isoDateOffset(1)) {
@@ -153,19 +154,7 @@ export default function TripForm({ onSubmit }: TripFormProps) {
 
         {/* Airport + trip length */}
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-          <div>
-            <label className="mb-3 flex items-center gap-2 text-sm font-medium text-white/80">
-              <Plane size={16} /> Home airport
-            </label>
-            <input
-              type="text"
-              maxLength={3}
-              value={homeAirport}
-              onChange={(e) => setHomeAirport(e.target.value.toUpperCase())}
-              placeholder="JFK"
-              className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 font-mono text-lg uppercase tracking-widest text-white placeholder-white/20 outline-none focus:border-fuchsia-400/60 focus:ring-2 focus:ring-fuchsia-400/20"
-            />
-          </div>
+          <AirportCombobox value={homeAirport} onChange={setHomeAirport} />
 
           <div>
             <label className="mb-3 flex items-center justify-between text-sm font-medium text-white/80">
