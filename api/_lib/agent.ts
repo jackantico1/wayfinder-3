@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { matchTrips } from "../../src/lib/matchTrip";
-import type { Destination } from "../../src/data/destinations";
+import { matchTrips } from "../../src/lib/matchTrip.js";
+import type { Destination } from "../../src/data/destinations.js";
 import type {
   AlternateTrip,
   FlightInfo,
@@ -8,10 +8,10 @@ import type {
   PlanTripRequest,
   PlanTripResponse,
   RecommendedTrip,
-} from "../../src/types/trip";
-import { CLAUDE_MODEL, createMessageWithRetry } from "./anthropic";
-import { searchFlights as duffelSearchFlights, type FlightOffer, type SearchFlightsParams } from "./duffel";
-import { searchHotels as serpApiSearchHotels, type HotelOffer, type SearchHotelsParams } from "./serpapi";
+} from "../../src/types/trip.js";
+import { CLAUDE_MODEL, createMessageWithRetry } from "./anthropic.js";
+import { searchFlights as duffelSearchFlights, type FlightOffer, type SearchFlightsParams } from "./duffel.js";
+import { searchHotels as serpApiSearchHotels, type HotelOffer, type SearchHotelsParams } from "./serpapi.js";
 
 const MAX_TURNS = 3;
 const MAX_FLIGHT_SEARCHES = 4;
@@ -94,7 +94,11 @@ const hotelInfoSchema = {
     currency: { type: "string" },
     hotelClass: { type: "number" },
     rating: { type: "number" },
-    link: { type: "string" },
+    link: {
+      type: "string",
+      description:
+        "The exact `link` URL from the search_hotels result for this property. Copy it verbatim — do not omit it or invent one — whenever the search result included it.",
+    },
   },
   required: ["found"],
 } as const;
@@ -141,6 +145,7 @@ function buildSystemPrompt(): string {
     "Use the search_hotels tool to check real lodging prices for the same candidates you check flights for.",
     "If a search returns no offers, try one more candidate from the list rather than giving up immediately.",
     "You have a limited number of flight and hotel searches available, so be selective.",
+    "When you call finalize_recommendation, copy each flight/hotel field (including the hotel's `link`) exactly as returned by the search tools — never omit or invent values.",
     "Once you have enough information, call finalize_recommendation exactly once with your final answer. Never answer in plain text.",
     "destination_city in your tool calls must exactly match one of the candidate `city` values you were given.",
   ].join(" ");
@@ -182,6 +187,15 @@ function addDays(isoDate: string, days: number): string {
   const date = new Date(`${isoDate}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
+}
+
+// Google Flights has no documented deep-link format for a specific route/date search —
+// its real "tfs" param is an undocumented base64 blob. Its natural-language "q" search
+// param is the only practically constructible option; if Google ever stops parsing it,
+// the user still lands on Google Flights and can search manually.
+function buildGoogleFlightsUrl(origin: string, destination: string, departureDate: string, returnDate: string): string {
+  const q = `Flights to ${destination} from ${origin} on ${departureDate} through ${returnDate}`;
+  return `https://www.google.com/travel/flights?q=${encodeURIComponent(q)}`;
 }
 
 function parseFlightInfo(raw: unknown): FlightInfo {
@@ -235,7 +249,9 @@ function buildResponseFromFinalize(
   usedFallback: boolean,
 ): PlanTripResponse {
   const chosenDestination = findCandidateByCity(candidates, input.destination_city) ?? candidates[0];
+  const returnDate = addDays(request.departureDate, request.tripLength);
   const flight = parseFlightInfo(input.flight);
+  flight.bookingLink = buildGoogleFlightsUrl(request.homeAirport, chosenDestination.airport, request.departureDate, returnDate);
   const hotel = parseHotelInfo(input.hotel);
 
   const chosen: RecommendedTrip = {
@@ -255,6 +271,7 @@ function buildResponseFromFinalize(
       const destination = findCandidateByCity(candidates, altInput.destination_city);
       if (!destination) return undefined;
       const altFlight = parseFlightInfo(altInput.flight);
+      altFlight.bookingLink = buildGoogleFlightsUrl(request.homeAirport, destination.airport, request.departureDate, returnDate);
       const altHotel = parseHotelInfo(altInput.hotel);
       return {
         destination,
@@ -271,21 +288,25 @@ function buildResponseFromFinalize(
 
 function fallbackResponse(candidates: Destination[], request: PlanTripRequest, toolCallsUsed: number): PlanTripResponse {
   const [top, ...rest] = candidates;
-  const emptyFlight: FlightInfo = { found: false };
+  const returnDate = addDays(request.departureDate, request.tripLength);
   const emptyHotel: HotelInfo = { found: false };
+  const flightFor = (destination: Destination): FlightInfo => ({
+    found: false,
+    bookingLink: buildGoogleFlightsUrl(request.homeAirport, destination.airport, request.departureDate, returnDate),
+  });
   return {
     chosen: {
       destination: top,
       rationale: top.description,
       itinerary: top.highlights,
-      flight: emptyFlight,
+      flight: flightFor(top),
       hotel: emptyHotel,
-      estimatedTotalCost: estimateTotalCost(top, request.tripLength, emptyFlight, emptyHotel),
+      estimatedTotalCost: estimateTotalCost(top, request.tripLength, flightFor(top), emptyHotel),
     },
     alternates: rest.slice(0, 2).map((destination) => ({
       destination,
       reason: destination.tagline,
-      flight: emptyFlight,
+      flight: flightFor(destination),
       hotel: emptyHotel,
     })),
     meta: { toolCallsUsed, usedFallback: true },
@@ -424,3 +445,5 @@ export async function runTripAgent(request: PlanTripRequest, deps: AgentDeps = d
 
   return fallbackResponse(candidates, request, flightSearchCount + hotelSearchCount);
 }
+
+export { buildGoogleFlightsUrl };

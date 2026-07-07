@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
-import { runTripAgent, type AgentDeps } from "./agent";
-import { matchTrips } from "../../src/lib/matchTrip";
-import type { PlanTripRequest } from "../../src/types/trip";
-import type { FlightOffer } from "./duffel";
-import type { HotelOffer } from "./serpapi";
+import { buildGoogleFlightsUrl, runTripAgent, type AgentDeps } from "./agent.js";
+import { matchTrips } from "../../src/lib/matchTrip.js";
+import type { PlanTripRequest } from "../../src/types/trip.js";
+import type { FlightOffer } from "./duffel.js";
+import type { HotelOffer } from "./serpapi.js";
 
 const baseRequest: PlanTripRequest = {
   budgetPerDay: 100,
@@ -16,6 +16,7 @@ const baseRequest: PlanTripRequest = {
 };
 
 const [topCandidate, secondCandidate] = matchTrips(baseRequest, 4).map((m) => m.destination);
+const expectedReturnDate = "2026-09-21"; // baseRequest.departureDate + tripLength days
 
 function fakeMessage(content: Anthropic.ContentBlock[]): Anthropic.Message {
   return {
@@ -81,7 +82,11 @@ describe("runTripAgent", () => {
 
     expect(searchFlights).toHaveBeenCalledTimes(1);
     expect(result.chosen.destination.city).toBe(topCandidate.city);
-    expect(result.chosen.flight).toEqual({ found: true, ...sampleOffer });
+    expect(result.chosen.flight).toEqual({
+      found: true,
+      ...sampleOffer,
+      bookingLink: buildGoogleFlightsUrl("JFK", topCandidate.airport, baseRequest.departureDate, expectedReturnDate),
+    });
     expect(result.meta.usedFallback).toBe(false);
     expect(result.meta.toolCallsUsed).toBe(1);
   });
@@ -246,5 +251,59 @@ describe("runTripAgent", () => {
     expect(searchFlights).toHaveBeenCalledTimes(1);
     expect(searchHotels).toHaveBeenCalledTimes(1);
     expect(result.meta.toolCallsUsed).toBe(2);
+  });
+
+  it("populates a Google Flights booking link for the chosen trip and each alternate", async () => {
+    const finalizeWithAlternate = {
+      ...finalizeInput(topCandidate.city),
+      alternates: [
+        { destination_city: secondCandidate.city, reason: "Also great.", flight: { found: false }, hotel: { found: false } },
+      ],
+    };
+    const createMessage = vi
+      .fn<AgentDeps["createMessage"]>()
+      .mockResolvedValueOnce(fakeMessage([toolUseBlock("t1", "finalize_recommendation", finalizeWithAlternate)]));
+
+    const searchFlights = vi.fn<AgentDeps["searchFlights"]>().mockResolvedValue([]);
+    const searchHotels = vi.fn<AgentDeps["searchHotels"]>().mockResolvedValue([]);
+
+    const result = await runTripAgent(baseRequest, { createMessage, searchFlights, searchHotels, now: () => 0 });
+
+    expect(result.chosen.flight.bookingLink).toBe(
+      buildGoogleFlightsUrl("JFK", topCandidate.airport, baseRequest.departureDate, expectedReturnDate),
+    );
+    expect(result.alternates[0].flight.bookingLink).toBe(
+      buildGoogleFlightsUrl("JFK", secondCandidate.airport, baseRequest.departureDate, expectedReturnDate),
+    );
+  });
+
+  it("populates a Google Flights booking link in the heuristic fallback path", async () => {
+    const createMessage = vi.fn<AgentDeps["createMessage"]>().mockResolvedValue(
+      fakeMessage([{ type: "text", text: "I dunno, pick something!" } as unknown as Anthropic.ContentBlock]),
+    );
+    const searchFlights = vi.fn<AgentDeps["searchFlights"]>();
+    const searchHotels = vi.fn<AgentDeps["searchHotels"]>();
+
+    const result = await runTripAgent(baseRequest, { createMessage, searchFlights, searchHotels, now: () => 0 });
+
+    expect(result.chosen.flight.bookingLink).toBe(
+      buildGoogleFlightsUrl("JFK", topCandidate.airport, baseRequest.departureDate, expectedReturnDate),
+    );
+    if (result.alternates.length > 0) {
+      expect(result.alternates[0].flight.bookingLink).toBe(
+        buildGoogleFlightsUrl("JFK", result.alternates[0].destination.airport, baseRequest.departureDate, expectedReturnDate),
+      );
+    }
+  });
+});
+
+describe("buildGoogleFlightsUrl", () => {
+  it("builds a Google Flights search URL with the natural-language q param", () => {
+    const url = buildGoogleFlightsUrl("JFK", "CDG", "2026-09-14", "2026-09-21");
+    expect(url).toBe(
+      "https://www.google.com/travel/flights?q=" +
+        encodeURIComponent("Flights to CDG from JFK on 2026-09-14 through 2026-09-21"),
+    );
+    expect(new URL(url).searchParams.get("q")).toBe("Flights to CDG from JFK on 2026-09-14 through 2026-09-21");
   });
 });

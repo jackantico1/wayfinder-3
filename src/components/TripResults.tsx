@@ -1,6 +1,20 @@
 import { motion } from "framer-motion";
-import { Plane, Hotel, Wallet, Clock, RotateCcw, Sparkles } from "lucide-react";
+import { Plane, Hotel, Wallet, Clock, RotateCcw, Sparkles, ArrowUpRight } from "lucide-react";
 import type { AlternateTrip, FlightInfo, HotelInfo, PlanTripResponse } from "../types/trip";
+
+function BookingLink({ href, label }: { href: string; label: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-fuchsia-400 hover:text-fuchsia-300"
+    >
+      {label}
+      <ArrowUpRight size={12} />
+    </a>
+  );
+}
 
 interface TripResultsProps {
   result: PlanTripResponse;
@@ -26,6 +40,7 @@ function FlightStat({ flight, airport }: { flight: FlightInfo; airport: string }
         </div>
         <p className="text-lg font-semibold text-white">Estimated</p>
         <p className="text-xs text-white/40">No live fares found for this route</p>
+        {flight.bookingLink && <BookingLink href={flight.bookingLink} label="Search flights" />}
       </div>
     );
   }
@@ -42,6 +57,7 @@ function FlightStat({ flight, airport }: { flight: FlightInfo; airport: string }
         {flight.airline ?? "Unknown carrier"}
         {flight.durationHours != null ? ` · ~${flight.durationHours}h` : ""} to {airport}
       </p>
+      {flight.bookingLink && <BookingLink href={flight.bookingLink} label="Book flight" />}
     </div>
   );
 }
@@ -72,6 +88,7 @@ function HotelStat({ hotel }: { hotel: HotelInfo }) {
         {hotel.name ?? "Unknown property"}
         {hotel.pricePerNight != null ? ` · ~$${Math.round(hotel.pricePerNight)}/night` : ""}
       </p>
+      {hotel.link && <BookingLink href={hotel.link} label="Book stay" />}
     </div>
   );
 }
@@ -108,6 +125,12 @@ function AlternateCard({ alternate }: { alternate: AlternateTrip }) {
             : "Estimated only"}
         </span>
       </div>
+      {(flight.bookingLink || hotel.link) && (
+        <div className="mt-2 flex flex-wrap items-center gap-4">
+          {flight.bookingLink && <BookingLink href={flight.bookingLink} label="Book flight" />}
+          {hotel.link && <BookingLink href={hotel.link} label="Book stay" />}
+        </div>
+      )}
     </div>
   );
 }

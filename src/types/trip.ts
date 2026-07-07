@@ -1,4 +1,4 @@
-import type { Destination, Season, Vibe } from "../data/destinations";
+import type { Destination, Season, Vibe } from "../data/destinations.js";
 
 export interface PlanTripRequest {
   budgetPerDay: number;
@@ -18,6 +18,7 @@ export interface FlightInfo {
   durationHours?: number;
   departAt?: string;
   arriveAt?: string;
+  bookingLink?: string;
 }
 
 export interface HotelInfo {
