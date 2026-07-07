@@ -20,11 +20,24 @@ export interface FlightInfo {
   arriveAt?: string;
 }
 
+export interface HotelInfo {
+  found: boolean;
+  name?: string;
+  type?: "hotel" | "vacation_rental";
+  pricePerNight?: number;
+  totalPrice?: number;
+  currency?: string;
+  hotelClass?: number;
+  rating?: number;
+  link?: string;
+}
+
 export interface RecommendedTrip {
   destination: Destination;
   rationale: string;
   itinerary: string[];
   flight: FlightInfo;
+  hotel: HotelInfo;
   estimatedTotalCost: number;
 }
 
@@ -32,6 +45,7 @@ export interface AlternateTrip {
   destination: Destination;
   reason: string;
   flight: FlightInfo;
+  hotel: HotelInfo;
 }
 
 export interface PlanTripResponse {

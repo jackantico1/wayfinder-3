@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
-import { Plane, Wallet, Clock, RotateCcw, Sparkles } from "lucide-react";
-import type { AlternateTrip, FlightInfo, PlanTripResponse } from "../types/trip";
+import { Plane, Hotel, Wallet, Clock, RotateCcw, Sparkles } from "lucide-react";
+import type { AlternateTrip, FlightInfo, HotelInfo, PlanTripResponse } from "../types/trip";
 
 interface TripResultsProps {
   result: PlanTripResponse;
@@ -46,8 +46,38 @@ function FlightStat({ flight, airport }: { flight: FlightInfo; airport: string }
   );
 }
 
+function HotelStat({ hotel }: { hotel: HotelInfo }) {
+  if (!hotel.found) {
+    return (
+      <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+        <div className="mb-1 flex items-center gap-2 text-white/50">
+          <Hotel size={14} />
+          <span className="text-xs uppercase tracking-wide">Hotel</span>
+        </div>
+        <p className="text-lg font-semibold text-white">Estimated</p>
+        <p className="text-xs text-white/40">No live rates found for this stay</p>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+      <div className="mb-1 flex items-center gap-2 text-white/50">
+        <Hotel size={14} />
+        <span className="text-xs uppercase tracking-wide">Hotel</span>
+      </div>
+      <p className="text-xl font-semibold text-white">
+        {hotel.totalPrice != null ? `$${Math.round(hotel.totalPrice).toLocaleString()}` : "—"}
+      </p>
+      <p className="text-xs text-white/40">
+        {hotel.name ?? "Unknown property"}
+        {hotel.pricePerNight != null ? ` · ~$${Math.round(hotel.pricePerNight)}/night` : ""}
+      </p>
+    </div>
+  );
+}
+
 function AlternateCard({ alternate }: { alternate: AlternateTrip }) {
-  const { destination, reason, flight } = alternate;
+  const { destination, reason, flight, hotel } = alternate;
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition-colors hover:border-white/20">
       <div className="mb-2 flex items-center gap-2">
@@ -57,7 +87,7 @@ function AlternateCard({ alternate }: { alternate: AlternateTrip }) {
         </h3>
       </div>
       <p className="mb-3 text-sm text-white/50">{reason}</p>
-      <div className="flex items-center gap-4 text-xs text-white/40">
+      <div className="flex flex-wrap items-center gap-4 text-xs text-white/40">
         <span className="flex items-center gap-1">
           <Wallet size={12} /> {destination.costPerDayUSD}/day
         </span>
@@ -66,6 +96,14 @@ function AlternateCard({ alternate }: { alternate: AlternateTrip }) {
           {flight.found
             ? `$${Math.round(flight.totalAmount ?? 0).toLocaleString()}${
                 flight.durationHours != null ? ` · ~${flight.durationHours}h` : ""
+              }`
+            : "Estimated only"}
+        </span>
+        <span className="flex items-center gap-1">
+          <Hotel size={12} />
+          {hotel.found
+            ? `$${Math.round(hotel.totalPrice ?? 0).toLocaleString()}${
+                hotel.pricePerNight != null ? ` · ~$${Math.round(hotel.pricePerNight)}/night` : ""
               }`
             : "Estimated only"}
         </span>
@@ -119,7 +157,7 @@ export default function TripResults({ result, onReset }: TripResultsProps) {
 
           <p className="mb-6 text-white/60">{chosen.rationale}</p>
 
-          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
               <div className="mb-1 flex items-center gap-2 text-white/50">
                 <Wallet size={14} />
@@ -128,9 +166,14 @@ export default function TripResults({ result, onReset }: TripResultsProps) {
               <p className="text-xl font-semibold text-white">
                 ${chosen.estimatedTotalCost.toLocaleString()}
               </p>
-              <p className="text-xs text-white/40">${chosen.destination.costPerDayUSD}/day + flight</p>
+              <p className="text-xs text-white/40">
+                {chosen.hotel.found
+                  ? `$${chosen.destination.costPerDayUSD}/day (food & activities) + hotel + flight`
+                  : `$${chosen.destination.costPerDayUSD}/day + flight`}
+              </p>
             </div>
             <FlightStat flight={chosen.flight} airport={chosen.destination.airport} />
+            <HotelStat hotel={chosen.hotel} />
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
               <div className="mb-1 flex items-center gap-2 text-white/50">
                 <Clock size={14} />

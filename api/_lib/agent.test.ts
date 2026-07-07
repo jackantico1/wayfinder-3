@@ -4,6 +4,7 @@ import { runTripAgent, type AgentDeps } from "./agent";
 import { matchTrips } from "../../src/lib/matchTrip";
 import type { PlanTripRequest } from "../../src/types/trip";
 import type { FlightOffer } from "./duffel";
+import type { HotelOffer } from "./serpapi";
 
 const baseRequest: PlanTripRequest = {
   budgetPerDay: 100,
@@ -42,12 +43,24 @@ const sampleOffer: FlightOffer = {
   arriveAt: "2026-09-14T14:30:00",
 };
 
+const sampleHotelOffer: HotelOffer = {
+  name: "Mock Grand Hotel",
+  type: "hotel",
+  pricePerNight: 120,
+  totalPrice: 840,
+  currency: "USD",
+  hotelClass: 4,
+  rating: 4.4,
+  link: "https://example.com/mock-grand-hotel",
+};
+
 function finalizeInput(city: string) {
   return {
     destination_city: city,
     rationale: "This fits your vibe perfectly.",
     itinerary: ["Do a thing", "Eat something great"],
     flight: { found: true, ...sampleOffer },
+    hotel: { found: true, ...sampleHotelOffer },
     alternates: [],
   };
 }
@@ -62,8 +75,9 @@ describe("runTripAgent", () => {
       .mockResolvedValueOnce(fakeMessage([toolUseBlock("t2", "finalize_recommendation", finalizeInput(topCandidate.city))]));
 
     const searchFlights = vi.fn<AgentDeps["searchFlights"]>().mockResolvedValue([sampleOffer]);
+    const searchHotels = vi.fn<AgentDeps["searchHotels"]>().mockResolvedValue([]);
 
-    const result = await runTripAgent(baseRequest, { createMessage, searchFlights, now: () => 0 });
+    const result = await runTripAgent(baseRequest, { createMessage, searchFlights, searchHotels, now: () => 0 });
 
     expect(searchFlights).toHaveBeenCalledTimes(1);
     expect(result.chosen.destination.city).toBe(topCandidate.city);
@@ -87,8 +101,9 @@ describe("runTripAgent", () => {
       .fn<AgentDeps["searchFlights"]>()
       .mockResolvedValueOnce([]) // no offers for top candidate
       .mockResolvedValueOnce([sampleOffer]);
+    const searchHotels = vi.fn<AgentDeps["searchHotels"]>().mockResolvedValue([]);
 
-    const result = await runTripAgent(baseRequest, { createMessage, searchFlights, now: () => 0 });
+    const result = await runTripAgent(baseRequest, { createMessage, searchFlights, searchHotels, now: () => 0 });
 
     expect(searchFlights).toHaveBeenCalledTimes(2);
     expect(result.chosen.destination.city).toBe(secondCandidate.city);
@@ -103,8 +118,9 @@ describe("runTripAgent", () => {
       return fakeMessage([toolUseBlock("tn", "search_flights", { origin: "JFK", destination: topCandidate.airport, departure_date: baseRequest.departureDate })]);
     });
     const searchFlights = vi.fn<AgentDeps["searchFlights"]>().mockResolvedValue([sampleOffer]);
+    const searchHotels = vi.fn<AgentDeps["searchHotels"]>().mockResolvedValue([]);
 
-    const result = await runTripAgent(baseRequest, { createMessage, searchFlights, now: () => 0 });
+    const result = await runTripAgent(baseRequest, { createMessage, searchFlights, searchHotels, now: () => 0 });
 
     expect(result.meta.usedFallback).toBe(false);
     expect(result.chosen.destination.city).toBe(topCandidate.city);
@@ -126,8 +142,9 @@ describe("runTripAgent", () => {
       ]);
     });
     const searchFlights = vi.fn<AgentDeps["searchFlights"]>().mockResolvedValue([sampleOffer]);
+    const searchHotels = vi.fn<AgentDeps["searchHotels"]>().mockResolvedValue([]);
 
-    await runTripAgent(baseRequest, { createMessage, searchFlights, now: () => 0 });
+    await runTripAgent(baseRequest, { createMessage, searchFlights, searchHotels, now: () => 0 });
 
     // Cap is 4 total Duffel calls even though the model asked for more.
     expect(searchFlights.mock.calls.length).toBeLessThanOrEqual(4);
@@ -138,8 +155,9 @@ describe("runTripAgent", () => {
       fakeMessage([{ type: "text", text: "I dunno, pick something!" } as unknown as Anthropic.ContentBlock]),
     );
     const searchFlights = vi.fn<AgentDeps["searchFlights"]>();
+    const searchHotels = vi.fn<AgentDeps["searchHotels"]>();
 
-    const result = await runTripAgent(baseRequest, { createMessage, searchFlights, now: () => 0 });
+    const result = await runTripAgent(baseRequest, { createMessage, searchFlights, searchHotels, now: () => 0 });
 
     expect(result.meta.usedFallback).toBe(true);
     expect(result.chosen.destination.city).toBe(topCandidate.city);
@@ -156,11 +174,77 @@ describe("runTripAgent", () => {
       return fakeMessage([toolUseBlock("tn", "search_flights", { origin: "JFK", destination: topCandidate.airport, departure_date: baseRequest.departureDate })]);
     });
     const searchFlights = vi.fn<AgentDeps["searchFlights"]>().mockResolvedValue([sampleOffer]);
+    const searchHotels = vi.fn<AgentDeps["searchHotels"]>().mockResolvedValue([]);
 
-    const result = await runTripAgent(baseRequest, { createMessage, searchFlights, now: () => elapsed });
+    const result = await runTripAgent(baseRequest, { createMessage, searchFlights, searchHotels, now: () => elapsed });
 
     expect(result.meta.usedFallback).toBe(false);
     // Deadline should have forced tool_choice on the 2nd turn instead of waiting for turn 3.
     expect(createMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it("calls search_hotels then finalizes with the returned hotel data", async () => {
+    const createMessage = vi
+      .fn<AgentDeps["createMessage"]>()
+      .mockResolvedValueOnce(
+        fakeMessage([toolUseBlock("t1", "search_hotels", { destination_city: topCandidate.city })]),
+      )
+      .mockResolvedValueOnce(fakeMessage([toolUseBlock("t2", "finalize_recommendation", finalizeInput(topCandidate.city))]));
+
+    const searchFlights = vi.fn<AgentDeps["searchFlights"]>().mockResolvedValue([]);
+    const searchHotels = vi.fn<AgentDeps["searchHotels"]>().mockResolvedValue([sampleHotelOffer]);
+
+    const result = await runTripAgent(baseRequest, { createMessage, searchFlights, searchHotels, now: () => 0 });
+
+    expect(searchHotels).toHaveBeenCalledTimes(1);
+    expect(searchHotels).toHaveBeenCalledWith({
+      query: `${topCandidate.city}, ${topCandidate.country}`,
+      checkInDate: baseRequest.departureDate,
+      checkOutDate: expect.any(String),
+      adults: 1,
+    });
+    expect(result.chosen.hotel).toEqual({ found: true, ...sampleHotelOffer });
+    expect(result.meta.toolCallsUsed).toBe(1);
+  });
+
+  it("caps hotel searches and tells the model the budget is exhausted", async () => {
+    let callCount = 0;
+    const createMessage = vi.fn<AgentDeps["createMessage"]>().mockImplementation(async () => {
+      callCount++;
+      if (callCount >= 3) {
+        return fakeMessage([toolUseBlock(`tf${callCount}`, "finalize_recommendation", finalizeInput(topCandidate.city))]);
+      }
+      return fakeMessage([
+        toolUseBlock(`t${callCount}a`, "search_hotels", { destination_city: topCandidate.city }),
+        toolUseBlock(`t${callCount}b`, "search_hotels", { destination_city: secondCandidate.city }),
+      ]);
+    });
+    const searchFlights = vi.fn<AgentDeps["searchFlights"]>().mockResolvedValue([]);
+    const searchHotels = vi.fn<AgentDeps["searchHotels"]>().mockResolvedValue([sampleHotelOffer]);
+
+    await runTripAgent(baseRequest, { createMessage, searchFlights, searchHotels, now: () => 0 });
+
+    expect(searchHotels.mock.calls.length).toBeLessThanOrEqual(4);
+  });
+
+  it("supports searching flights and hotels for the same candidate in one turn", async () => {
+    const createMessage = vi
+      .fn<AgentDeps["createMessage"]>()
+      .mockResolvedValueOnce(
+        fakeMessage([
+          toolUseBlock("t1a", "search_flights", { origin: "JFK", destination: topCandidate.airport, departure_date: baseRequest.departureDate }),
+          toolUseBlock("t1b", "search_hotels", { destination_city: topCandidate.city }),
+        ]),
+      )
+      .mockResolvedValueOnce(fakeMessage([toolUseBlock("t2", "finalize_recommendation", finalizeInput(topCandidate.city))]));
+
+    const searchFlights = vi.fn<AgentDeps["searchFlights"]>().mockResolvedValue([sampleOffer]);
+    const searchHotels = vi.fn<AgentDeps["searchHotels"]>().mockResolvedValue([sampleHotelOffer]);
+
+    const result = await runTripAgent(baseRequest, { createMessage, searchFlights, searchHotels, now: () => 0 });
+
+    expect(searchFlights).toHaveBeenCalledTimes(1);
+    expect(searchHotels).toHaveBeenCalledTimes(1);
+    expect(result.meta.toolCallsUsed).toBe(2);
   });
 });
