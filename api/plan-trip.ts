@@ -1,6 +1,6 @@
-import type { Vibe } from "../src/data/destinations";
-import type { PlanTripErrorBody, PlanTripRequest } from "../src/types/trip";
-import { runTripAgent } from "./_lib/agent";
+import type { Vibe } from "../src/data/destinations.js";
+import type { PlanTripErrorBody, PlanTripRequest } from "../src/types/trip.js";
+import { runTripAgent } from "./_lib/agent.js";
 
 // Minimal structural types so we don't depend on @vercel/node's heavier package
 // just for two shapes. Compatible with Vercel's Node function runtime.

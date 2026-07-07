@@ -1,4 +1,4 @@
-import { destinations, type BudgetTier, type Destination, type Season, type Vibe } from "../data/destinations";
+import { destinations, type BudgetTier, type Destination, type Season, type Vibe } from "../data/destinations.js";
 
 export interface TripQuery {
   budgetPerDay: number;

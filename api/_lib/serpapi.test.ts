@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeProperties } from "./serpapi";
+import { normalizeProperties } from "./serpapi.js";
 
 describe("normalizeProperties", () => {
   const sampleProperty = {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeOffers, parseIsoDurationHours } from "./duffel";
+import { normalizeOffers, parseIsoDurationHours } from "./duffel.js";
 
 describe("parseIsoDurationHours", () => {
   it("parses hours and minutes", () => {
