@@ -4,6 +4,14 @@ Wayfinder is a trip-inspiration app: tell it your budget, your vibe, your home
 airport, and when you want to travel, and an agent proposes a destination
 (plus a couple of alternates) grounded in real flight data.
 
+## What is this Jack
+Wayfinder is an app that helps you book travel. The user enters some inputs, this app then calls to the google flights and hotels API through Serp API, passes that to a single agent on Antrhopic which analyzes the data and user's input and then recommends a plan.
+
+## Ways this can be leveled up
+Creating sub agents for activities, flights, and hotels which are managed by a harness
+
+Giving these agents browser control where they actually go book flights
+
 ## How it works
 
 1. The frontend pre-filters a curated dataset of 15 destinations
